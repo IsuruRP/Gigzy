@@ -1,53 +1,70 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
+// Design tokens for the Gigzy app
+// Dark-mode gig marketplace aesthetic
 
-import { Platform } from 'react-native';
+export const colors = {
+  background: '#080B14',
+  surface: 'rgba(255, 255, 255, 0.05)',
+  surfaceBorder: 'rgba(255, 255, 255, 0.1)',
+  surfaceHover: 'rgba(255, 255, 255, 0.08)',
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+  primary: '#F59E0B',
+  primaryDark: '#D97706',
+  primaryLight: 'rgba(245, 158, 11, 0.15)',
+  primaryGlow: 'rgba(245, 158, 11, 0.25)',
 
-export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+  accent: '#7C3AED',
+  accentLight: 'rgba(124, 58, 237, 0.15)',
+
+  text: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textMuted: '#475569',
+
+  error: '#EF4444',
+  errorLight: 'rgba(239, 68, 68, 0.12)',
+
+  success: '#10B981',
+  successLight: 'rgba(16, 185, 129, 0.12)',
+
+  inputBg: 'rgba(255, 255, 255, 0.06)',
+  inputBorder: 'rgba(255, 255, 255, 0.12)',
+  inputBorderFocus: '#F59E0B',
+
+  // Slide accent colors (onboarding)
+  slide1: '#F59E0B',
+  slide2: '#7C3AED',
+  slide3: '#10B981',
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+};
+
+export const borderRadius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  full: 9999,
+};
+
+export const shadows = {
+  primaryGlow: {
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 12,
   },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+};
