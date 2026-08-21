@@ -1,86 +1,254 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Dimensions,
+  FlatList,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
+import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../FirebaseConfig';
 import { useAuth } from '../../context/AuthContext';
 import { colors, spacing, borderRadius } from '../../constants/theme';
+import { Gig } from '../../types/gig';
+import { fetchOpenGigs, seedSampleGigs } from '../../services/gigService';
+import CategoryPills from '../../components/CategoryPills';
+import GigCard from '../../components/GigCard';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-export default function Home() {
+export default function HomeScreen() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  const [gigs, setGigs] = useState<Gig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [error, setError] = useState<string | null>(null);
+
   const firstName = user?.displayName?.split(' ')[0] ?? 'there';
-  const role = ''; // Will be fetched from Firestore later
+
+  // Load gigs from Firestore
+  const loadGigs = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const data = await fetchOpenGigs();
+      setGigs(data);
+    } catch (err: any) {
+      console.error('Failed to load gigs:', err);
+      setError('Could not load gigs. Please check your connection.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGigs();
+  }, [loadGigs]);
+
+  // Filter gigs based on search input and selected category
+  const filteredGigs = useMemo(() => {
+    return gigs.filter((gig) => {
+      // Category match
+      const matchCategory =
+        selectedCategory === 'All' ||
+        gig.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+        selectedCategory.toLowerCase().includes(gig.category.toLowerCase());
+
+      // Search match
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return matchCategory;
+
+      const titleMatch = gig.title?.toLowerCase().includes(query);
+      const descMatch = gig.description?.toLowerCase().includes(query);
+      const clientMatch = gig.clientName?.toLowerCase().includes(query);
+      const tagsMatch = gig.tags?.some((t) => t.toLowerCase().includes(query));
+
+      return matchCategory && (titleMatch || descMatch || clientMatch || tagsMatch);
+    });
+  }, [gigs, searchQuery, selectedCategory]);
+
+  // Handle seeding test data
+  const handleSeedData = async () => {
+    try {
+      setSeeding(true);
+      await seedSampleGigs();
+      Alert.alert('Success', 'Sample gigs have been added to Firestore!');
+      await loadGigs();
+    } catch (err: any) {
+      Alert.alert('Seeding Failed', err?.message || 'Could not seed sample gigs.');
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const handleSignOut = async () => {
-    await signOut(auth);
-    // Root layout useEffect will redirect to onboarding
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut(auth);
+        },
+      },
+    ]);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Background blob */}
-      <View style={styles.blob1} />
-      <View style={styles.blob2} />
+      {/* Background Ambience Blobs */}
+      <View style={styles.blobTop} />
+      <View style={styles.blobBottom} />
 
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Hello, {firstName}! 👋</Text>
-            <Text style={styles.subtitle}>Welcome to Gigzy</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.avatarCircle}
-            onPress={handleSignOut}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.avatarText}>
-              {(user?.displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Placeholder card — home content will be built in the next phase */}
-        <View style={styles.card}>
-          <Text style={styles.cardEmoji}>🚧</Text>
-          <Text style={styles.cardTitle}>App Coming Soon</Text>
-          <Text style={styles.cardText}>
-            You're successfully authenticated! The main app experience is being built next.
-          </Text>
-        </View>
-
-        {/* Quick stats row */}
-        <View style={styles.statsRow}>
-          {[
-            { label: 'Gigs', value: '0', emoji: '💼' },
-            { label: 'Earnings', value: '$0', emoji: '💰' },
-            { label: 'Reviews', value: '0', emoji: '⭐' },
-          ].map((stat) => (
-            <View key={stat.label} style={styles.statCard}>
-              <Text style={styles.statEmoji}>{stat.emoji}</Text>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+      {/* Main Content */}
+      <FlatList
+        data={filteredGigs}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <GigCard
+            gig={item}
+            onPress={() => router.push(`/gig/${item.id}` as any)}
+          />
+        )}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadGigs(true)}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.headerContainer}>
+            {/* Header: User greeting & Profile/Logout */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.greeting}>Hey, {firstName}! 👋</Text>
+                <Text style={styles.subtitle}>Find your next youth opportunity</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.avatarCircle}
+                onPress={handleSignOut}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.avatarText}>
+                  {(user?.displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
+                </Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
 
-        {/* Sign out button */}
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
+            {/* Search Bar */}
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search gigs, skills, keywords..."
+                placeholderTextColor={colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Category Filter Pills */}
+            <CategoryPills
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+            />
+
+            {/* Opportunity Status & Quick Seed Action */}
+            <View style={styles.resultsInfoRow}>
+              <Text style={styles.resultsCount}>
+                {loading ? 'Searching opportunities...' : `${filteredGigs.length} open ${filteredGigs.length === 1 ? 'gig' : 'gigs'} available`}
+              </Text>
+
+              {/* Seed Button for testing / quick setup */}
+              <TouchableOpacity
+                style={styles.seedButton}
+                onPress={handleSeedData}
+                disabled={seeding}
+                activeOpacity={0.8}
+              >
+                {seeding ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles-outline" size={13} color={colors.primary} />
+                    <Text style={styles.seedText}>Seed Gigs</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.centerBox}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading open opportunities...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.centerBox}>
+              <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+              <Text style={styles.emptyTitle}>Oops!</Text>
+              <Text style={styles.emptySubtitle}>{error}</Text>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => loadGigs()}
+              >
+                <Text style={styles.actionButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.centerBox}>
+              <Text style={styles.emptyEmoji}>🔍</Text>
+              <Text style={styles.emptyTitle}>No Open Gigs Found</Text>
+              <Text style={styles.emptySubtitle}>
+                {searchQuery || selectedCategory !== 'All'
+                  ? 'Try adjusting your search query or selecting a different category.'
+                  : 'There are no open gigs right now. Tap "Seed Gigs" above to populate sample gigs!'}
+              </Text>
+              {(searchQuery || selectedCategory !== 'All') && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('All');
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Clear All Filters</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -90,47 +258,48 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  blob1: {
+  blobTop: {
     position: 'absolute',
-    top: -60,
-    left: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
+    top: -80,
+    left: -60,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
     backgroundColor: colors.primaryGlow,
-    opacity: 0.4,
+    opacity: 0.35,
   },
-  blob2: {
+  blobBottom: {
     position: 'absolute',
-    bottom: 80,
+    bottom: -60,
     right: -60,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
     backgroundColor: colors.accentLight,
-    opacity: 0.5,
+    opacity: 0.45,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+  listContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xxl,
   },
-
-  // Header
+  headerContainer: {
+    paddingTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
   },
   greeting: {
     fontSize: 24,
     fontWeight: '800',
     color: colors.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     marginTop: 2,
   },
@@ -149,70 +318,90 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
   },
-
-  // Card
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  cardEmoji: { fontSize: 48, marginBottom: spacing.md },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  cardText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-
-  // Stats
-  statsRow: {
+  searchBar: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
+    alignItems: 'center',
+    backgroundColor: colors.inputBg,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: 4,
+    borderColor: colors.inputBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: spacing.xs,
+    gap: 10,
   },
-  statEmoji: { fontSize: 22 },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
     color: colors.text,
+    padding: 0,
   },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-
-  // Sign out
-  signOutButton: {
-    borderRadius: borderRadius.full,
-    paddingVertical: 14,
+  resultsInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    marginBottom: 4,
   },
-  signOutText: {
-    fontSize: 15,
+  resultsCount: {
+    fontSize: 13,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  seedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primaryGlow,
+    gap: 4,
+  },
+  seedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  centerBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: spacing.sm,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: spacing.lg,
+  },
+  actionButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: borderRadius.full,
+  },
+  actionButtonText: {
+    color: '#080B14',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
